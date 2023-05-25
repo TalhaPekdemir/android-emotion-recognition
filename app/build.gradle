@@ -31,6 +31,11 @@ android {
     }
 }
 
+// Fix kotlin duplicate class issue
+configurations.implementation {
+    exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+}
+
 dependencies {
 
     implementation 'androidx.appcompat:appcompat:1.6.1'
@@ -55,9 +60,4 @@ dependencies {
 
     // MLKit
     implementation 'com.google.android.gms:play-services-mlkit-face-detection:17.1.0'
-
-    // Duplicate class error
-    // https://stackoverflow.com/questions/75243778/android-studio-duplicate-class-kotlin
-    implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.8.0"))
-
 }
