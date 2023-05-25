@@ -5,6 +5,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.media.Image;
+import android.speech.tts.TextToSpeech;
 import android.util.Log;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -22,9 +23,9 @@ import com.google.mlkit.vision.face.Face;
 import com.google.mlkit.vision.face.FaceDetector;
 import com.tp.cameraxemotionrecognition.ml.EmotionModel;
 
-import org.tensorflow.lite.support.model.Model;
 import org.tensorflow.lite.DataType;
 import org.tensorflow.lite.gpu.CompatibilityList;
+import org.tensorflow.lite.support.model.Model;
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer;
 
 import java.io.IOException;
@@ -32,7 +33,9 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+
 
 public class FaceDetectorAnalyzer implements ImageAnalysis.Analyzer{
     private static final String TAG = "FaceDetector";
@@ -43,14 +46,29 @@ public class FaceDetectorAnalyzer implements ImageAnalysis.Analyzer{
     private final int imageSize = 224;
     private final String[] classes = {"anger", "contempt", "disgust", "fear", "happy", "neutral", "sad", "surprise"};
     private final int numThreads = 4;
-    public FaceDetectorAnalyzer(FaceDetector faceDetector, Context context, ImageView imageView, TextView textView){
+    private final TextToSpeech textToSpeech;
+    private static HashMap<String,String> emotionMap;
+    public FaceDetectorAnalyzer(FaceDetector faceDetector, Context context, ImageView imageView, TextView textView, TextToSpeech textToSpeech){
+        emotionMap = new HashMap<>();
+        emotionMap.put("anger", "kızgın");
+        emotionMap.put("contempt", "küçümseyici");
+        emotionMap.put("disgust", "iğrenmiş");
+        emotionMap.put("fear", "korkmuş");
+        emotionMap.put("happy", "mutlu");
+        emotionMap.put("neutral", "normal");
+        emotionMap.put("sad", "üzgün");
+        emotionMap.put("surprise", "mutlu");
+
         this.faceDetector = faceDetector;
         this.context = context;
         this.imageView = imageView;
         this.textView = textView;
+        this.textToSpeech = textToSpeech;
     }
+
     public String classify(Bitmap image) {
         String classWithConf = null;
+        String emotion = null;
 
         try {
             // TODO her seferinde yapmak yerine detector oluştuğunda oluştur
@@ -111,6 +129,7 @@ public class FaceDetectorAnalyzer implements ImageAnalysis.Analyzer{
                 }
             }
 
+            emotion = classes[maxPos];
             classWithConf = classes[maxPos] + " %" + maxConfidence * 100 + "\n";
             textView.setText(classWithConf); // TODO remove
 
@@ -119,7 +138,7 @@ public class FaceDetectorAnalyzer implements ImageAnalysis.Analyzer{
         } catch (IOException e) {
             Log.e(TAG, "classify: ", e);
         }
-        return classWithConf;
+        return emotion;
     }
 
     @Override
@@ -134,7 +153,7 @@ public class FaceDetectorAnalyzer implements ImageAnalysis.Analyzer{
                         @Override
                         public void onSuccess(List<Face> faces) {
                             if(faces != null){
-                                List<String> emotionsList = new ArrayList<>();
+                                ArrayList<String> emotionsList = new ArrayList<>();
                                 for(Face face : faces){
                                     Rect faceRect = face.getBoundingBox();
 //                                    Log.d(TAG, "onSuccess: " + faceRect);
@@ -151,13 +170,23 @@ public class FaceDetectorAnalyzer implements ImageAnalysis.Analyzer{
                                 CharSequence[] charSequences = emotionsList.toArray(new CharSequence[emotionsList.size()]);
                                 String text = "Faces: " + faces.size() + "\n" + Arrays.toString(charSequences);
                                 textView.setText(text);
+                                CharSequence mostFrequentEmotion = Utils.mostFrequentWord(emotionsList);
+
+                                // TTS mevcut metot çağırımı - API LEVEL > LOLLIPOP
+                                String textToSPEAK = "Çoğunluk " + emotionMap.get(mostFrequentEmotion);
+                                Log.d(TAG, "onSuccess: " + textToSPEAK);
+
+                                // TTS motoru hala konuşmuyorsa konuşsun.
+                                if(!textToSpeech.isSpeaking()){
+                                    textToSpeech.speak(emotionMap.get(mostFrequentEmotion), TextToSpeech.QUEUE_FLUSH, null, null );
+                                }
                             }
                         }
                     })
                     .addOnFailureListener(new OnFailureListener() {
                         @Override
                         public void onFailure(@NonNull Exception e) {
-                            e.printStackTrace();
+                            Log.e(TAG, "onFailure: ", e);
                         }
                     }).addOnCompleteListener(new OnCompleteListener<List<Face>>() {
                         @Override
