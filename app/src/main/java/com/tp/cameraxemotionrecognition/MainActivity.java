@@ -1,8 +1,13 @@
 package com.tp.cameraxemotionrecognition;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.speech.tts.TextToSpeech;
+import android.util.Log;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -22,6 +27,8 @@ import com.google.mlkit.vision.face.FaceDetection;
 import com.google.mlkit.vision.face.FaceDetector;
 import com.google.mlkit.vision.face.FaceDetectorOptions;
 
+import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -34,8 +41,9 @@ public class MainActivity extends AppCompatActivity {
     private PreviewView previewView;
     private ImageView imageView;
     private TextView textView;
-    FaceDetectorOptions faceDetectorOptions;
-    FaceDetector faceDetector;
+    private FaceDetectorOptions faceDetectorOptions;
+    private FaceDetector faceDetector;
+    private TextToSpeech textToSpeech;
 
 
     @Override
@@ -46,20 +54,82 @@ public class MainActivity extends AppCompatActivity {
         // Layout elemanlarını tanıt
         initComponents();
 
+        // TTS motorunu yapılandır
+        initTTS();
+
         // kamera kullanımı için izin var mı kontrol et
         checkCameraPermission();
 
         // Configure Face Detector
         faceDetectorOptions = new FaceDetectorOptions.Builder().build();
-
     }
 
     private void initComponents(){
         previewView = findViewById(R.id.previewView);
         imageView = findViewById(R.id.imageView);
         textView = findViewById(R.id.textView);
+
+//        textToSpeech = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
+//            @Override
+//            public void onInit(int status) {
+//                if(status != TextToSpeech.ERROR){
+//                    int result = textToSpeech.setLanguage(Locale.getDefault()
+////                            new Locale("tr_TR")
+//                    );
+//                    Toast.makeText(MainActivity.this, "is tr available: " + textToSpeech.isLanguageAvailable(new Locale("tr_TR")), Toast.LENGTH_SHORT).show();
+//                }
+//            }
+//        });
     }
 
+    private void initTTS(){
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
+            textToSpeech = new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
+                @Override
+                public void onInit(int status) {
+                    // Çünkü java Türkçe lokalizasyona sahip değil
+                    Locale locale = new Locale("tr_TR");
+
+                    if (status != TextToSpeech.ERROR) {
+                        textToSpeech.setLanguage(locale);
+                    }
+
+
+                    boolean isGoogleAvaible=false;
+                    // Yüklü TTS engine kontrol et
+                    List engineList = textToSpeech.getEngines();
+
+                    for(Object strEngine : engineList){
+                        Log.d(TAG, strEngine.toString());
+
+                        // Cihazdaki TTS motorlarında Google var mı kotrol et
+                        if(strEngine.toString().equals("EngineInfo{name=com.google.android.tts}")){
+                            isGoogleAvaible = true;
+                        }
+                    }
+
+                    if(!isGoogleAvaible){
+                        Toast.makeText(MainActivity.this, "Google TTS eksik. Yükleme gerekli.", Toast.LENGTH_SHORT).show();
+
+                        Intent intent = new Intent(Intent.ACTION_VIEW);
+                        intent.setData(Uri.parse("market://details?id=com.google.android.tts"));
+                        startActivity(intent);
+                    }
+
+                    //google tts yoksa veya verisi eksikse
+                    int code = textToSpeech.isLanguageAvailable(locale);
+                    if (code == TextToSpeech.LANG_NOT_SUPPORTED || code == TextToSpeech.LANG_MISSING_DATA) {
+                        Intent installIntent = new Intent();
+                        installIntent.setAction(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA);
+                        startActivity(installIntent);
+                    }
+                }
+            }, "com.google.android.tts");
+        }
+        else{
+            Toast.makeText(this, "API level>21 gerekli", Toast.LENGTH_SHORT).show();
+        }
+    }
     private void startCamera(){
         cameraProviderFuture = ProcessCameraProvider.getInstance(this);
 
@@ -87,9 +157,10 @@ public class MainActivity extends AppCompatActivity {
                 faceDetector = FaceDetection.getClient(faceDetectorOptions);
                 FaceDetectorAnalyzer faceDetectorAnalyzer = new FaceDetectorAnalyzer(
                         faceDetector,
-                        getApplicationContext(),
+                        this,
                         imageView,
-                        textView);
+                        textView,
+                        textToSpeech);
                 imageAnalyzer.setAnalyzer(executor, faceDetectorAnalyzer);
 
 
@@ -159,17 +230,23 @@ public class MainActivity extends AppCompatActivity {
                 startCamera();
             }
             else{
+                // TODO TTS
                 Toast.makeText(this, "Kullanıcı kameraya izin vermedi.", Toast.LENGTH_SHORT).show();
             }
         }
     }
 
-    //    private boolean allPermissionsGranted(){
-//        for(String permission: REQUIRED_PERMISSIONS){
-//            if(ContextCompat.checkSelfPermission(getApplicationContext(), permission) != PackageManager.PERMISSION_GRANTED){
-//                return false;
-//            }
-//        }
-//        return true;
-//    }
+    @Override
+    protected void onPause() {
+        super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if(textToSpeech != null){
+            textToSpeech.stop();
+            textToSpeech.shutdown();
+        }
+        super.onDestroy();
+    }
 }
