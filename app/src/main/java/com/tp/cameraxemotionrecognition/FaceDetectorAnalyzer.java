@@ -5,6 +5,8 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.media.Image;
+import android.os.Handler;
+import android.os.Looper;
 import android.speech.tts.TextToSpeech;
 import android.util.Log;
 import android.widget.ImageView;
@@ -48,6 +50,8 @@ public class FaceDetectorAnalyzer implements ImageAnalysis.Analyzer{
     private final int numThreads = 4;
     private final TextToSpeech textToSpeech;
     private static HashMap<String,String> emotionMap;
+    private long delay = 5000L;
+
     public FaceDetectorAnalyzer(FaceDetector faceDetector, Context context, ImageView imageView, TextView textView, TextToSpeech textToSpeech){
         emotionMap = new HashMap<>();
         emotionMap.put("anger", "kızgın");
@@ -143,62 +147,69 @@ public class FaceDetectorAnalyzer implements ImageAnalysis.Analyzer{
 
     @Override
     public void analyze(@NonNull ImageProxy imageProxy) {
-//        image.getFormat() // YUV_420_888 - 35
-        @SuppressLint("UnsafeOptInUsageError") Image mediaImage = imageProxy.getImage();
-        if (mediaImage != null) {
-            InputImage image = InputImage.fromMediaImage(mediaImage, imageProxy.getImageInfo().getRotationDegrees());
-            Log.d(TAG, "analyze: W:" + image.getWidth() + " H:" + image.getHeight());
-            Task<List<Face>> result = faceDetector.process(image)
-                    .addOnSuccessListener(new OnSuccessListener<List<Face>>() {
-                        @Override
-                        public void onSuccess(List<Face> faces) {
-                            if(faces != null){
-                                ArrayList<String> emotionsList = new ArrayList<>();
-                                for(Face face : faces){
-                                    Rect faceRect = face.getBoundingBox();
+        // 5 saniyede bir analiz et
+        Handler handler = new Handler(Looper.getMainLooper());
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                //image.getFormat() // YUV_420_888 - 35
+                @SuppressLint("UnsafeOptInUsageError") Image mediaImage = imageProxy.getImage();
+                if (mediaImage != null) {
+                    InputImage image = InputImage.fromMediaImage(mediaImage, imageProxy.getImageInfo().getRotationDegrees());
+                    Log.d(TAG, "analyze: W:" + image.getWidth() + " H:" + image.getHeight());
+                    Task<List<Face>> result = faceDetector.process(image)
+                            .addOnSuccessListener(new OnSuccessListener<List<Face>>() {
+                                @Override
+                                public void onSuccess(List<Face> faces) {
+                                    if(faces != null){
+                                        ArrayList<String> emotionsList = new ArrayList<>();
+                                        for(Face face : faces){
+                                            Rect faceRect = face.getBoundingBox();
 //                                    Log.d(TAG, "onSuccess: " + faceRect);
-                                    @SuppressLint("UnsafeOptInUsageError") Bitmap fullImage = BitmapUtils.getBitmap(imageProxy);
-                                    // TODO fullImage can be null
-                                    Bitmap croppedImage = Utils.cropBitmap(fullImage, faceRect);
+                                            @SuppressLint("UnsafeOptInUsageError") Bitmap fullImage = BitmapUtils.getBitmap(imageProxy);
+                                            // TODO fullImage can be null
+                                            Bitmap croppedImage = Utils.cropBitmap(fullImage, faceRect);
 //                                    Log.d(TAG, "onSuccess: cropped image: w: " + croppedImage.getWidth()
 //                                            + " h:" + croppedImage.getHeight());
-                                    Bitmap resizedImage = Bitmap.createScaledBitmap(croppedImage, imageSize, imageSize, false);
-                                    // TODO debug bittikten sonra sil
-                                    imageView.setImageBitmap(resizedImage);
-                                    emotionsList.add(classify(resizedImage));
-                                }
-                                CharSequence[] charSequences = emotionsList.toArray(new CharSequence[emotionsList.size()]);
-                                String text = "Faces: " + faces.size() + "\n" + Arrays.toString(charSequences);
-                                textView.setText(text);
-                                CharSequence mostFrequentEmotion = Utils.mostFrequentWord(emotionsList);
+                                            Bitmap resizedImage = Bitmap.createScaledBitmap(croppedImage, imageSize, imageSize, false);
+                                            // TODO debug bittikten sonra sil
+                                            imageView.setImageBitmap(resizedImage);
+                                            emotionsList.add(classify(resizedImage));
+                                        }
+                                        CharSequence[] charSequences = emotionsList.toArray(new CharSequence[emotionsList.size()]);
+                                        String text = "Faces: " + faces.size() + "\n" + Arrays.toString(charSequences);
+                                        textView.setText(text);
+                                        CharSequence mostFrequentEmotion = Utils.mostFrequentWord(emotionsList);
 
-                                // TTS mevcut metot çağırımı - API LEVEL > LOLLIPOP
-                                String textToSPEAK = "Çoğunluk " + emotionMap.get(mostFrequentEmotion);
-                                Log.d(TAG, "onSuccess: " + textToSPEAK);
+                                        // TTS mevcut metot çağırımı - API LEVEL > LOLLIPOP
+                                        String textToSPEAK = "Çoğunluk " + emotionMap.get(mostFrequentEmotion);
+                                        Log.d(TAG, "onSuccess: " + textToSPEAK);
 
-                                // TTS motoru hala konuşmuyorsa konuşsun.
-                                if(!textToSpeech.isSpeaking()){
-                                    textToSpeech.speak(emotionMap.get(mostFrequentEmotion), TextToSpeech.QUEUE_FLUSH, null, null );
+                                        // TTS motoru hala konuşmuyorsa konuşsun.
+                                        if(!textToSpeech.isSpeaking()){
+                                            textToSpeech.speak(emotionMap.get(mostFrequentEmotion), TextToSpeech.QUEUE_FLUSH, null, null );
+                                        }
+                                    }
                                 }
-                            }
-                        }
-                    })
-                    .addOnFailureListener(new OnFailureListener() {
-                        @Override
-                        public void onFailure(@NonNull Exception e) {
-                            Log.e(TAG, "onFailure: ", e);
-                        }
-                    }).addOnCompleteListener(new OnCompleteListener<List<Face>>() {
-                        @Override
-                        public void onComplete(@NonNull Task<List<Face>> task) {
-                            // Sadece son frame tutulduğu için frame içinde face detection
-                            // başarılı veya başarısız olmadan yeni frame almak için.
-                            // Aksi takdirde image already closed hatası (metot sonunda çağrılırsa),
-                            // yeni frame alamama (failure ve success eventleri içinde çağrılırsa)
-                            // gerçekleşir.
-                            imageProxy.close();
-                        }
-                    });
-        }
+                            })
+                            .addOnFailureListener(new OnFailureListener() {
+                                @Override
+                                public void onFailure(@NonNull Exception e) {
+                                    Log.e(TAG, "onFailure: ", e);
+                                }
+                            }).addOnCompleteListener(new OnCompleteListener<List<Face>>() {
+                                @Override
+                                public void onComplete(@NonNull Task<List<Face>> task) {
+                                    // Sadece son frame tutulduğu için frame içinde face detection
+                                    // başarılı veya başarısız olmadan yeni frame almak için.
+                                    // Aksi takdirde image already closed hatası (metot sonunda çağrılırsa),
+                                    // yeni frame alamama (failure ve success eventleri içinde çağrılırsa)
+                                    // gerçekleşir.
+                                    imageProxy.close();
+                                }
+                            });
+                }
+            }
+        }, delay);
     }
 }
