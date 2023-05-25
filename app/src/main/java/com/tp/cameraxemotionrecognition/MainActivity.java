@@ -4,7 +4,6 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.speech.tts.TextToSpeech;
 import android.util.Log;
@@ -45,7 +44,6 @@ public class MainActivity extends AppCompatActivity {
     private FaceDetector faceDetector;
     private TextToSpeech textToSpeech;
 
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -68,68 +66,52 @@ public class MainActivity extends AppCompatActivity {
         previewView = findViewById(R.id.previewView);
         imageView = findViewById(R.id.imageView);
         textView = findViewById(R.id.textView);
-
-//        textToSpeech = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
-//            @Override
-//            public void onInit(int status) {
-//                if(status != TextToSpeech.ERROR){
-//                    int result = textToSpeech.setLanguage(Locale.getDefault()
-////                            new Locale("tr_TR")
-//                    );
-//                    Toast.makeText(MainActivity.this, "is tr available: " + textToSpeech.isLanguageAvailable(new Locale("tr_TR")), Toast.LENGTH_SHORT).show();
-//                }
-//            }
-//        });
     }
 
     private void initTTS(){
-        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-            textToSpeech = new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
-                @Override
-                public void onInit(int status) {
-                    // Çünkü java Türkçe lokalizasyona sahip değil
-                    Locale locale = new Locale("tr_TR");
+        textToSpeech = new TextToSpeech(getApplicationContext(), new TextToSpeech.OnInitListener() {
+            @Override
+            public void onInit(int status) {
+                // Çünkü java Türkçe lokalizasyona sahip değil
+                Locale locale = new Locale("tr_TR");
 
-                    if (status != TextToSpeech.ERROR) {
-                        textToSpeech.setLanguage(locale);
-                    }
+                if (status != TextToSpeech.ERROR) {
+                    textToSpeech.setLanguage(locale);
+                }
 
 
-                    boolean isGoogleAvaible=false;
-                    // Yüklü TTS engine kontrol et
-                    List engineList = textToSpeech.getEngines();
+                boolean isGoogleAvaible=false;
+                // Yüklü TTS engine kontrol et
+                List engineList = textToSpeech.getEngines();
 
-                    for(Object strEngine : engineList){
-                        Log.d(TAG, strEngine.toString());
+                for(Object strEngine : engineList){
+                    Log.d(TAG, strEngine.toString());
 
-                        // Cihazdaki TTS motorlarında Google var mı kotrol et
-                        if(strEngine.toString().equals("EngineInfo{name=com.google.android.tts}")){
-                            isGoogleAvaible = true;
-                        }
-                    }
-
-                    if(!isGoogleAvaible){
-                        Toast.makeText(MainActivity.this, "Google TTS eksik. Yükleme gerekli.", Toast.LENGTH_SHORT).show();
-
-                        Intent intent = new Intent(Intent.ACTION_VIEW);
-                        intent.setData(Uri.parse("market://details?id=com.google.android.tts"));
-                        startActivity(intent);
-                    }
-
-                    //google tts yoksa veya verisi eksikse
-                    int code = textToSpeech.isLanguageAvailable(locale);
-                    if (code == TextToSpeech.LANG_NOT_SUPPORTED || code == TextToSpeech.LANG_MISSING_DATA) {
-                        Intent installIntent = new Intent();
-                        installIntent.setAction(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA);
-                        startActivity(installIntent);
+                    // Cihazdaki TTS motorlarında Google var mı kotrol et
+                    if(strEngine.toString().equals("EngineInfo{name=com.google.android.tts}")){
+                        isGoogleAvaible = true;
                     }
                 }
-            }, "com.google.android.tts");
-        }
-        else{
-            Toast.makeText(this, "API level>21 gerekli", Toast.LENGTH_SHORT).show();
-        }
+
+                if(!isGoogleAvaible){
+                    Toast.makeText(MainActivity.this, "Google TTS eksik. Yükleme gerekli.", Toast.LENGTH_SHORT).show();
+
+                    Intent intent = new Intent(Intent.ACTION_VIEW);
+                    intent.setData(Uri.parse("market://details?id=com.google.android.tts"));
+                    startActivity(intent);
+                }
+
+                //google tts yoksa veya verisi eksikse
+                int code = textToSpeech.isLanguageAvailable(locale);
+                if (code == TextToSpeech.LANG_NOT_SUPPORTED || code == TextToSpeech.LANG_MISSING_DATA) {
+                    Intent installIntent = new Intent();
+                    installIntent.setAction(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA);
+                    startActivity(installIntent);
+                }
+            }
+        }, "com.google.android.tts");
     }
+
     private void startCamera(){
         cameraProviderFuture = ProcessCameraProvider.getInstance(this);
 
@@ -139,16 +121,12 @@ public class MainActivity extends AppCompatActivity {
                 ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
 
                 // Preview'in kendisi
-                Preview preview = new Preview.Builder()
-//                        .setTargetResolution(new Size(480,640))
-                        .build();
+                Preview preview = new Preview.Builder().build();
 
                 preview.setSurfaceProvider(previewView.getSurfaceProvider());
 
                 // ImageAnalyzer use case builder
                 ImageAnalysis imageAnalyzer = new ImageAnalysis.Builder()
-                        // TODO bulunan yüzler çok küçük 30-50 px w&h inference boyutu artırılmalı mı?
-//                        .setTargetResolution(new Size(1280, 720))
                         .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                         .build();
 
@@ -163,8 +141,6 @@ public class MainActivity extends AppCompatActivity {
                         textToSpeech);
                 imageAnalyzer.setAnalyzer(executor, faceDetectorAnalyzer);
 
-
-
                 // Default olarak arka kamerayı al
                 CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
 
@@ -172,47 +148,14 @@ public class MainActivity extends AppCompatActivity {
                 cameraProvider.unbindAll();
 
                 // bind uses cases (owner, cameraselector, usecase, usecase, usecase)
-                cameraProvider.bindToLifecycle(this, cameraSelector, preview, imageAnalyzer);
+                cameraProvider.bindToLifecycle(MainActivity.this, cameraSelector, preview, imageAnalyzer);
 
             } catch (InterruptedException | ExecutionException e) {
-               e.printStackTrace();
+               Log.e(TAG, "Lifecycle bind failed", e);
             }
 
         }, ContextCompat.getMainExecutor(this));
     }
-
-//    void bindPreview(@NonNull ProcessCameraProvider cameraProvider) {
-//        Preview preview = new Preview.Builder()
-//                .build();
-//
-//        CameraSelector cameraSelector = new CameraSelector.Builder()
-//                .requireLensFacing(CameraSelector.LENS_FACING_BACK)
-//                .build();
-//
-//        preview.setSurfaceProvider(previewView.getSurfaceProvider());
-//
-//        ImageAnalysis imageAnalysis =
-//                new ImageAnalysis.Builder()
-//                        // enable the following line if RGBA output is needed.
-//                        //.setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
-//                        .setTargetResolution(new Size(1280, 720))
-//                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-//                        .build();
-//
-//        imageAnalysis.setAnalyzer(executor, new ImageAnalysis.Analyzer() {
-//            @Override
-//            public void analyze(@NonNull ImageProxy imageProxy) {
-//                int rotationDegrees = imageProxy.getImageInfo().getRotationDegrees();
-//                // insert your code here.
-//
-//                // after done, release the ImageProxy object
-//                imageProxy.close();
-//            }
-//        });
-//
-//        Camera camera = cameraProvider.bindToLifecycle((LifecycleOwner)this, cameraSelector, preview);
-//    }
-
 
     private void checkCameraPermission(){
         if(ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED){
@@ -230,15 +173,9 @@ public class MainActivity extends AppCompatActivity {
                 startCamera();
             }
             else{
-                // TODO TTS
                 Toast.makeText(this, "Kullanıcı kameraya izin vermedi.", Toast.LENGTH_SHORT).show();
             }
         }
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
     }
 
     @Override
